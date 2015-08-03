@@ -32,6 +32,10 @@ int main(int argc, char **argv)
 
 	// Loop through packets
 	while (cur_packet = pcap_next(handle, &header)) {
+		// Flags
+		bool ipv4_flag = false;
+		bool ipv6_flag = false;
+
 		// 0. Standard information about packet,
 		printf("Packet #: %d\n", count);
 		count = count + 1;
@@ -44,10 +48,12 @@ int main(int argc, char **argv)
 		{
 			case IPv4_TYPE :
 			printf("Ether type: IPv4\n");
+			ipv4_flag = true;
 			break;
 
 			case IPv6_TYPE :
 			printf("Ether type: IPv6\n");
+			ipv6_flag = true;
 			break;
 
 			default :
@@ -60,8 +66,17 @@ int main(int argc, char **argv)
 		cur_packet += 14;
 		struct ip *ip_header = (struct ip*) cur_packet;
 
-		printf("From: %s\n", inet_ntoa(ip_header->ip_src));
-		printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
+		//IPv6 HEADER??
+
+		if (ipv4_flag) {
+			printf("From: %s\n", inet_ntoa(ip_header->ip_src));
+			printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
+		}
+		else if (ipv6_flag) {
+			//char straddr[16];
+			//inet_ntop(AF_INET6, ip_header->ip_src, straddr, sizeof(straddr));
+			//printf("From: %s\n", straddr);
+		}
 
 		printf("Protocol: %d\n", ip_header->ip_p);
 
