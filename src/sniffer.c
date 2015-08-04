@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include <pcap.h>
 #include <stdlib.h>
 //#include <linux/ip.h>
@@ -8,6 +9,32 @@
 
 #define IPv4_TYPE 2048
 #define IPv6_TYPE 34525
+
+struct ipv6 {
+	uint32_t vtcfl;
+	uint16_t length;
+	uint8_t next_header;
+	uint8_t hop_limit;
+	struct in6_addr ip_src;
+	struct in6_addr ip_dst;
+};
+
+char* get_protocol_name(int value) {
+	switch(value)
+	{
+		case 6:
+		return "TCP";
+
+		case 17:
+		return "UDP";
+
+		case 44:
+		return "IPv6-Frag";
+
+		case 58:
+		return "IPv6-ICMP";
+	}
+}
 
 int main(int argc, char **argv)
 {
@@ -46,17 +73,17 @@ int main(int argc, char **argv)
 
 		switch(packet_type)
 		{
-			case IPv4_TYPE :
+			case IPv4_TYPE:
 			printf("Ether type: IPv4\n");
 			ipv4_flag = true;
 			break;
 
-			case IPv6_TYPE :
+			case IPv6_TYPE:
 			printf("Ether type: IPv6\n");
 			ipv6_flag = true;
 			break;
 
-			default :
+			default:
 			printf("Unsupported ether type.\n");
 			break;
 		}
@@ -64,22 +91,22 @@ int main(int argc, char **argv)
 		// 2. Get header info: from/to address, protocol.
 		// NOTE: ICMPv6 has header size of 48 bytes, IPv4 (UDP, TCP) has 20 bytes.
 		cur_packet += 14;
-		struct ip *ip_header = (struct ip*) cur_packet;
-
-		//IPv6 HEADER??
 
 		if (ipv4_flag) {
+			struct ip *ip_header = (struct ip*) cur_packet;
 			printf("From: %s\n", inet_ntoa(ip_header->ip_src));
 			printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
+			printf("Protocol: %d\n", get_protocol_name(ip_header->ip_p));
 		}
 		else if (ipv6_flag) {
-			//char straddr[16];
-			//inet_ntop(AF_INET6, ip_header->ip_src, straddr, sizeof(straddr));
-			//printf("From: %s\n", straddr);
+			struct ipv6 *ipv6_header = (struct ipv6*) cur_packet;
+			char straddr[32];
+			inet_ntop(AF_INET6, &ipv6_header->ip_src, straddr, sizeof(straddr));
+			printf("From: %s\n", straddr);
+			printf("Protocol: %d\n", get_protocol_name((int) &ipv6_header->next_header));
 		}
 
-		printf("Protocol: %d\n", ip_header->ip_p);
-
+		
 		// 3. Get packet info: src/dst ports, payload size.
 		if (packet_type == IPv4_TYPE) {
 			cur_packet += 20;
@@ -93,8 +120,6 @@ int main(int argc, char **argv)
 		}
 		
 		printf("###############################\n");
-
-
 	}
 
 	return 0;
