@@ -1,6 +1,6 @@
 To compile:
 
-$ g++ -o sniffer sniffer.c -lpcap
+$ gcc -o sniffer sniffer.c -lpcap
 
 
 To run:
