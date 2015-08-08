@@ -2,13 +2,13 @@
 #include <stdbool.h>
 #include <pcap.h>
 #include <stdlib.h>
-//#include <linux/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 
 #define IPv4_TYPE 2048
 #define IPv6_TYPE 34525
+#define PPOE_TYPE 34916
 
 struct ipv6 {
 	uint32_t vtcfl;
@@ -19,22 +19,8 @@ struct ipv6 {
 	struct in6_addr ip_dst;
 };
 
-char* get_protocol_name(int value) {
-	switch(value)
-	{
-		case 6:
-		return "TCP";
-
-		case 17:
-		return "UDP";
-
-		case 44:
-		return "IPv6-Frag";
-
-		case 58:
-		return "IPv6-ICMP";
-	}
-}
+void print_ipv6_header(struct ipv6*);
+const char* get_protocol_name(int);
 
 int main(int argc, char **argv)
 {
@@ -62,6 +48,7 @@ int main(int argc, char **argv)
 		// Flags
 		bool ipv4_flag = false;
 		bool ipv6_flag = false;
+		bool ppoe_flag = false;
 
 		// 0. Standard information about packet,
 		printf("Packet #: %d\n", count);
@@ -83,6 +70,11 @@ int main(int argc, char **argv)
 			ipv6_flag = true;
 			break;
 
+			case PPOE_TYPE:
+			printf("Ether type: PPOE\n");
+			ppoe_flag = true;
+			break;
+
 			default:
 			printf("Unsupported ether type.\n");
 			break;
@@ -90,20 +82,23 @@ int main(int argc, char **argv)
 		
 		// 2. Get header info: from/to address, protocol.
 		// NOTE: ICMPv6 has header size of 48 bytes, IPv4 (UDP, TCP) has 20 bytes.
-		cur_packet += 14;
-
+		
 		if (ipv4_flag) {
+			cur_packet += 14;
 			struct ip *ip_header = (struct ip*) cur_packet;
 			printf("From: %s\n", inet_ntoa(ip_header->ip_src));
 			printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
-			printf("Protocol: %d\n", get_protocol_name(ip_header->ip_p));
+			printf("Protocol: %s\n", get_protocol_name(ip_header->ip_p));
 		}
 		else if (ipv6_flag) {
+			cur_packet += 14;
 			struct ipv6 *ipv6_header = (struct ipv6*) cur_packet;
-			char straddr[32];
-			inet_ntop(AF_INET6, &ipv6_header->ip_src, straddr, sizeof(straddr));
-			printf("From: %s\n", straddr);
-			printf("Protocol: %d\n", get_protocol_name((int) &ipv6_header->next_header));
+			print_ipv6_header(ipv6_header);
+		}
+		else if (ppoe_flag) {
+			cur_packet += 42;
+			struct ipv6 *ipv6_header = (struct ipv6*) cur_packet;
+			print_ipv6_header(ipv6_header);
 		}
 
 		
@@ -123,4 +118,65 @@ int main(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+void print_ipv6_header(struct ipv6* ipv6_header) {
+	char srcaddr[32];
+	char dstaddr[32];
+	inet_ntop(AF_INET6, &ipv6_header->ip_src, srcaddr, sizeof(srcaddr));
+	inet_ntop(AF_INET6, &ipv6_header->ip_dst, dstaddr, sizeof(dstaddr));
+	printf("From: %s\n", srcaddr);
+	printf("To: %s\n", dstaddr);
+	printf("Protocol: %s\n", get_protocol_name(ipv6_header->next_header));
+}
+
+const char* get_protocol_name(int value) {
+	//printf("VALUE: %d\n", value);
+	const char *protocol = " ";
+	switch(value)
+	{
+		case 0:
+		protocol = "IPv6 Extension - Hop-by-hop";
+		return protocol;
+
+		case 6:
+		protocol = "TCP";
+		return protocol;
+
+		case 17:
+		protocol = "UDP";
+		return protocol;
+
+		case 43:
+		protocol = "IPv6 Extension - Routing";
+		return protocol;
+
+		case 44:
+		protocol = "IPv6 Extension - ESP";
+		return protocol;
+
+		case 50:
+		protocol = "IPv6 Extension - Destination options";
+		return protocol;
+
+		case 51:
+		protocol = "IPv6 Extension - AH";
+		return protocol;
+
+		case 58:
+		protocol = "ICMPv6";
+		return protocol;
+
+		case 60:
+		protocol = "IPv6 Extension - Destination options";
+		return protocol;
+
+		case 135:
+		protocol = "IPv6 Extension - Mobility";
+		return protocol;
+
+		default:
+		protocol = "Unknown";
+		return protocol;
+	}
 }
