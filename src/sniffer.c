@@ -8,13 +8,16 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 
+// Definitions for certain ether types
 #define IPv4_TYPE 2048
 #define IPv6_TYPE 34525
 #define PPOE_TYPE 34916
 
+// Custom enum for different protocol versions
 typedef enum {TCP, UDP, ICMP, ICMPv6, UNKNOWN, EXTH} protocol_ver;
 protocol_ver cur_protocol = UNKNOWN;
 
+// Custom struct for an IPv6 header
 struct ipv6 {
 	uint32_t vtcfl;
 	uint16_t length;
@@ -24,13 +27,14 @@ struct ipv6 {
 	struct in6_addr ip_dst;
 };
 
-void print_ipv6_header(struct ipv6*);
-void print_tcp_header(struct tcphdr*);
-void print_udp_header(struct udphdr*);
-void print_icmp_header(struct icmp*, protocol_ver);
-const char* get_protocol_name(int);
-const char* get_icmpv4_code(int);
-const char* get_icmpv6_code(int);
+void print_ipv4_header(struct ip*); // Prints details of an IPv4 header.
+void print_ipv6_header(struct ipv6*); // Prints details of an IPv6 header.
+void print_tcp_header(struct tcphdr*); // Prints details of a TCP header.
+void print_udp_header(struct udphdr*); // Prints details of a UDP header.
+void print_icmp_header(struct icmp*, protocol_ver); // Prints details of an ICMP (v6 too) header.
+const char* get_protocol_name(int); // Uses a protocol number and returns a string based off that number from a subset of protocols.
+const char* get_icmpv4_code(int); // Uses an ICMP type number and returns the code corresponding to that number from a subset of codes.
+const char* get_icmpv6_code(int); // Uses an ICMPv6 type number and returns the code corresponding to that number from a subset of codes.
 
 int main(int argc, char **argv)
 {
@@ -48,11 +52,6 @@ int main(int argc, char **argv)
 	// -----------------------
 
 
-	// --------------------------------
-	// Potentially write to a file here
-	// --------------------------------
-
-
 	// Loop through packets
 	while (cur_packet = pcap_next(handle, &header)) {
 		// Flags
@@ -68,6 +67,7 @@ int main(int argc, char **argv)
 		// 1. Find packet type contained at the start of the packet.
 		int packet_type = ((int) (cur_packet[12]) << 8) | (int) cur_packet[13];
 
+		// Set flags based on ether type.
 		switch(packet_type)
 		{
 			case IPv4_TYPE:
@@ -86,19 +86,15 @@ int main(int argc, char **argv)
 			break;
 
 			default:
-			printf("Unsupported ether type.\n");
+			printf("Unknown ether type.\n");
 			break;
 		}
 		
 		// 2. Get header info: from/to address, protocol.
-		// NOTE: ICMPv6 has header size of 48 bytes, IPv4 (UDP, TCP) has 20 bytes.
-		
 		if (ipv4_flag) {
 			cur_packet += 14;
 			struct ip *ip_header = (struct ip*) cur_packet;
-			printf("From: %s\n", inet_ntoa(ip_header->ip_src));
-			printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
-			printf("Protocol: %s\n", get_protocol_name(ip_header->ip_p));
+			print_ipv4_header(ip_header);
 		}
 		else if (ipv6_flag) {
 			cur_packet += 14;
@@ -152,26 +148,37 @@ int main(int argc, char **argv)
 	return 0;
 }
 
+// Prints details of an IPv4 header.
+void print_ipv4_header(struct ip* ip_header) {
+	printf("From: %s\n", inet_ntoa(ip_header->ip_src)); // inet_ntoa() is deprecated in favour of inet_ntop(), but bypasses the char[] arguments
+	printf("To: %s\n", inet_ntoa(ip_header->ip_dst));
+	printf("Protocol: %s\n", get_protocol_name(ip_header->ip_p));
+}
+
+// Prints details of an IPv6 header.
 void print_ipv6_header(struct ipv6* ipv6_header) {
 	char srcaddr[32];
 	char dstaddr[32];
-	inet_ntop(AF_INET6, &ipv6_header->ip_src, srcaddr, sizeof(srcaddr));
+	inet_ntop(AF_INET6, &ipv6_header->ip_src, srcaddr, sizeof(srcaddr)); // inet_ntop() takes a binary address (both IP versions) and returns in text form
 	inet_ntop(AF_INET6, &ipv6_header->ip_dst, dstaddr, sizeof(dstaddr));
 	printf("From: %s\n", srcaddr);
 	printf("To: %s\n", dstaddr);
 	printf("Protocol: %s\n", get_protocol_name(ipv6_header->next_header));
 }
 
+// Prints details of a TCP header.
 void print_tcp_header(struct tcphdr* tcp_header) {
 	printf("Src port: %d\n", ntohs(tcp_header->th_sport)); // ntohs() takes a 16-bit number in TCP/IP network byte order and returns in host byte order
 	printf("Dst port: %d\n", ntohs(tcp_header->th_dport));
 }
 
+// Prints details of a UDP header.
 void print_udp_header(struct udphdr* udp_header) {
-	printf("Src port: %d\n", ntohs(udp_header->uh_sport)); // ntohs() takes a 16-bit number in TCP/IP network byte order and returns in host byte order
+	printf("Src port: %d\n", ntohs(udp_header->uh_sport));
 	printf("Dst port: %d\n", ntohs(udp_header->uh_dport));
 }
 
+// Prints details of an ICMP (v6 too) header.
 void print_icmp_header(struct icmp* icmp_header, protocol_ver version) {
 	if (version == ICMP) {
 		printf("ICMP type %d: %s\n", icmp_header->icmp_type, get_icmpv4_code(icmp_header->icmp_type));
@@ -249,6 +256,7 @@ const char* get_protocol_name(int value) {
 	}
 }
 
+// Uses an ICMP type number and returns the code corresponding to that number from a subset of codes.
 const char* get_icmpv4_code(int value) {
 	const char *code = " ";
 	switch(value)
@@ -267,6 +275,7 @@ const char* get_icmpv4_code(int value) {
 	}
 }
 
+// Uses an ICMPv6 type number and returns the code corresponding to that number from a subset of codes.
 const char* get_icmpv6_code(int value) {
 	const char *code = " ";
 	switch(value)
