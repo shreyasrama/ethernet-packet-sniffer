@@ -12,7 +12,7 @@
 #define IPv6_TYPE 34525
 #define PPOE_TYPE 34916
 
-typedef enum {TCP, UDP, ICMP, UNKNOWN, EXTH} protocol_ver;
+typedef enum {TCP, UDP, ICMP, ICMPv6, UNKNOWN, EXTH} protocol_ver;
 protocol_ver cur_protocol = UNKNOWN;
 
 struct ipv6 {
@@ -27,8 +27,10 @@ struct ipv6 {
 void print_ipv6_header(struct ipv6*);
 void print_tcp_header(struct tcphdr*);
 void print_udp_header(struct udphdr*);
-void print_icmp_header(struct icmp*);
+void print_icmp_header(struct icmp*, protocol_ver);
 const char* get_protocol_name(int);
+const char* get_icmpv4_code(int);
+const char* get_icmpv6_code(int);
 
 int main(int argc, char **argv)
 {
@@ -125,7 +127,7 @@ int main(int argc, char **argv)
 		else if (ipv4_flag && cur_protocol == ICMP) {
 			cur_packet += 20;
 			struct icmp *icmp_header = (struct icmp*) cur_packet;
-			print_icmp_header(icmp_header);
+			print_icmp_header(icmp_header, ICMP);
 		}
 		// IPv6
 		else if (ipv6_flag && cur_protocol == TCP) {
@@ -138,13 +140,12 @@ int main(int argc, char **argv)
 			struct udphdr *udp_header = (struct udphdr*) cur_packet;
 			print_udp_header(udp_header);
 		}
-		else if (ipv6_flag && cur_protocol == ICMP) {
+		else if (ipv6_flag && cur_protocol == ICMPv6) {
 			cur_packet += 40;
 			struct icmp *icmp_header = (struct icmp*) cur_packet;
-			print_icmp_header(icmp_header);
+			print_icmp_header(icmp_header, ICMPv6);
 		}
 		
-		printf("###############################\n");
 		printf("\n");
 	}
 
@@ -171,8 +172,13 @@ void print_udp_header(struct udphdr* udp_header) {
 	printf("Dst port: %d\n", ntohs(udp_header->uh_dport));
 }
 
-void print_icmp_header(struct icmp* icmp_header) {
-	printf("ICMP type: %d\n", icmp_header->icmp_type);
+void print_icmp_header(struct icmp* icmp_header, protocol_ver version) {
+	if (version == ICMP) {
+		printf("ICMP type %d: %s\n", icmp_header->icmp_type, get_icmpv4_code(icmp_header->icmp_type));
+	}
+	else if (version == ICMPv6) {
+		printf("ICMPv6 type %d: %s\n", icmp_header->icmp_type, get_icmpv6_code(icmp_header->icmp_type));
+	}
 }
 
 // Uses a protocol number and returns a string based off that number from a subset of protocols.
@@ -223,7 +229,7 @@ const char* get_protocol_name(int value) {
 
 		case 58:
 		protocol = "ICMPv6";
-		cur_protocol = ICMP;
+		cur_protocol = ICMPv6;
 		return protocol;
 
 		case 60:
@@ -240,5 +246,37 @@ const char* get_protocol_name(int value) {
 		protocol = "Unknown";
 		cur_protocol = UNKNOWN;
 		return protocol;
+	}
+}
+
+const char* get_icmpv4_code(int value) {
+	const char *code = " ";
+	switch(value)
+	{
+		case 0:
+		code = "Echo reply (used to ping)";
+		return code;
+
+		case 8:
+		code = "Echo request (used to ping)";
+		return code;
+
+		default:
+		code = "Unknown";
+		return code;
+	}
+}
+
+const char* get_icmpv6_code(int value) {
+	const char *code = " ";
+	switch(value)
+	{
+		case 134:
+		code = "Router Advertisement (NDP)";
+		return code;
+
+		default:
+		code = "Unknown";
+		return code;
 	}
 }
