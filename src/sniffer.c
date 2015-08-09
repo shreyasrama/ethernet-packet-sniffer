@@ -3,12 +3,17 @@
 #include <pcap.h>
 #include <stdlib.h>
 #include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 
 #define IPv4_TYPE 2048
 #define IPv6_TYPE 34525
 #define PPOE_TYPE 34916
+
+typedef enum {TCP, UDP, ICMP, UNKNOWN, EXTH} protocol_ver;
+protocol_ver cur_protocol = UNKNOWN;
 
 struct ipv6 {
 	uint32_t vtcfl;
@@ -20,6 +25,9 @@ struct ipv6 {
 };
 
 void print_ipv6_header(struct ipv6*);
+void print_tcp_header(struct tcphdr*);
+void print_udp_header(struct udphdr*);
+void print_icmp_header(struct icmp*);
 const char* get_protocol_name(int);
 
 int main(int argc, char **argv)
@@ -102,19 +110,42 @@ int main(int argc, char **argv)
 		}
 
 		
-		// 3. Get packet info: src/dst ports, payload size.
-		if (packet_type == IPv4_TYPE) {
+		// 3. Get packet info: src/dst ports, ICMP info.
+		// IPv4
+		if (ipv4_flag && cur_protocol == TCP) {
 			cur_packet += 20;
 			struct tcphdr *tcp_header = (struct tcphdr*) cur_packet;
-			printf("Src port: %d\n", ntohs(tcp_header->th_sport)); // ntohs() takes a 16-bit number in TCP/IP network byte order and returns in host byte order
-			printf("Dst port: %d\n", ntohs(tcp_header->th_dport));
+			print_tcp_header(tcp_header);
 		}
-		else {
-			printf("Src port: IPv6\n");
-			printf("Dst port: IPv6\n");
+		else if (ipv4_flag && cur_protocol == UDP) {
+			cur_packet += 20;
+			struct udphdr *udp_header = (struct udphdr*) cur_packet;
+			print_udp_header(udp_header);
+		}
+		else if (ipv4_flag && cur_protocol == ICMP) {
+			cur_packet += 20;
+			struct icmp *icmp_header = (struct icmp*) cur_packet;
+			print_icmp_header(icmp_header);
+		}
+		// IPv6
+		else if (ipv6_flag && cur_protocol == TCP) {
+			cur_packet += 40;
+			struct tcphdr *tcp_header = (struct tcphdr*) cur_packet;
+			print_tcp_header(tcp_header);
+		}
+		else if (ipv6_flag && cur_protocol == UDP) {
+			cur_packet += 40;
+			struct udphdr *udp_header = (struct udphdr*) cur_packet;
+			print_udp_header(udp_header);
+		}
+		else if (ipv6_flag && cur_protocol == ICMP) {
+			cur_packet += 40;
+			struct icmp *icmp_header = (struct icmp*) cur_packet;
+			print_icmp_header(icmp_header);
 		}
 		
 		printf("###############################\n");
+		printf("\n");
 	}
 
 	return 0;
@@ -130,6 +161,21 @@ void print_ipv6_header(struct ipv6* ipv6_header) {
 	printf("Protocol: %s\n", get_protocol_name(ipv6_header->next_header));
 }
 
+void print_tcp_header(struct tcphdr* tcp_header) {
+	printf("Src port: %d\n", ntohs(tcp_header->th_sport)); // ntohs() takes a 16-bit number in TCP/IP network byte order and returns in host byte order
+	printf("Dst port: %d\n", ntohs(tcp_header->th_dport));
+}
+
+void print_udp_header(struct udphdr* udp_header) {
+	printf("Src port: %d\n", ntohs(udp_header->uh_sport)); // ntohs() takes a 16-bit number in TCP/IP network byte order and returns in host byte order
+	printf("Dst port: %d\n", ntohs(udp_header->uh_dport));
+}
+
+void print_icmp_header(struct icmp* icmp_header) {
+	printf("ICMP type: %d\n", icmp_header->icmp_type);
+}
+
+// Uses a protocol number and returns a string based off that number from a subset of protocols.
 const char* get_protocol_name(int value) {
 	//printf("VALUE: %d\n", value);
 	const char *protocol = " ";
@@ -137,46 +183,62 @@ const char* get_protocol_name(int value) {
 	{
 		case 0:
 		protocol = "IPv6 Extension - Hop-by-hop";
+		cur_protocol = EXTH;
+		return protocol;
+
+		case 1:
+		protocol = "ICMP";
+		cur_protocol = ICMP;
 		return protocol;
 
 		case 6:
 		protocol = "TCP";
+		cur_protocol = TCP;
 		return protocol;
 
 		case 17:
 		protocol = "UDP";
+		cur_protocol = UDP;
 		return protocol;
 
 		case 43:
 		protocol = "IPv6 Extension - Routing";
+		cur_protocol = EXTH;
 		return protocol;
 
 		case 44:
 		protocol = "IPv6 Extension - ESP";
+		cur_protocol = EXTH;
 		return protocol;
 
 		case 50:
 		protocol = "IPv6 Extension - Destination options";
+		cur_protocol = EXTH;
 		return protocol;
 
 		case 51:
 		protocol = "IPv6 Extension - AH";
+		cur_protocol = EXTH;
 		return protocol;
 
 		case 58:
 		protocol = "ICMPv6";
+		cur_protocol = ICMP;
 		return protocol;
 
 		case 60:
 		protocol = "IPv6 Extension - Destination options";
+		cur_protocol = EXTH;
 		return protocol;
 
 		case 135:
 		protocol = "IPv6 Extension - Mobility";
+		cur_protocol = EXTH;
 		return protocol;
 
 		default:
 		protocol = "Unknown";
+		cur_protocol = UNKNOWN;
 		return protocol;
 	}
 }
