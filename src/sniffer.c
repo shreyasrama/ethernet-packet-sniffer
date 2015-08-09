@@ -38,19 +38,19 @@ const char* get_icmpv6_code(int); // Uses an ICMPv6 type number and returns the 
 
 int main(int argc, char **argv)
 {
-	struct pcap_pkthdr header; // Header struct for pcap packets. See <pcap.h>
-	const u_char *cur_packet;  // The current packet
-
+	// START code segment that I adapted from cn.wei.hp@gmail.com
+	// from this link: https://code.google.com/p/pcapsctpspliter/issues/detail?id=6
+	struct pcap_pkthdr header;
+	const u_char *cur_packet;
 	pcap_t *handle;
 	char errbuf[PCAP_ERRBUF_SIZE];
-	handle = pcap_open_offline(argv[1], errbuf); // Open pcap file
+	handle = pcap_open_offline(argv[1], errbuf);
+	if (handle == NULL) {
+		printf("Couldn't open pcap file %s: %s\n", argv[1], errbuf);
+	}
+	// END code segment that I adapted from cn.wei.hp@gmail.com
+
 	int count = 1; // Initialise a counter of packets
-
-
-	// -----------------------
-	// Error check handle here
-	// -----------------------
-
 
 	// Loop through packets
 	while (cur_packet = pcap_next(handle, &header)) {
@@ -65,7 +65,10 @@ int main(int argc, char **argv)
 		printf("Packet length: %d\n", header.len);
 
 		// 1. Find packet type contained at the start of the packet.
+		// START code segment that I borrowed from cn.wei.hp@gmail.com
+		// from this link: https://code.google.com/p/pcapsctpspliter/issues/detail?id=6
 		int packet_type = ((int) (cur_packet[12]) << 8) | (int) cur_packet[13];
+		// END code segment that I borrowed from cn.wei.hp@gmail.com
 
 		// Set flags based on ether type.
 		switch(packet_type)
@@ -144,7 +147,7 @@ int main(int argc, char **argv)
 		
 		printf("\n");
 	}
-
+	pcap_close(handle);
 	return 0;
 }
 
